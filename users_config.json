@@ -1,0 +1,17 @@
+{
+  "next_id": 2,
+  "users": [
+    {
+      "id": 1,
+      "email": "drdavid@childpsych.ie",
+      "password": {
+        "salt": "fa6d67d650baea04beff722ee4957508",
+        "hash": "0a2f5668f606607502cfca9842f6f2daded2436ab6243f36be950371f02942ea"
+      },
+      "is_admin": true,
+      "can_report": true,
+      "can_invoice": true,
+      "active": true
+    }
+  ]
+}
