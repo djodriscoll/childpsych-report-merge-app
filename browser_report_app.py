@@ -103,6 +103,8 @@ INVOICE_REGISTER = OUTPUT_DIR / "Invoice_Register.xlsx"
 SESSIONS = {}
 DEFAULT_LOGIN_EMAIL = "drdavid@childpsych.ie"
 DEFAULT_LOGIN_PASSWORD = "childpsych"
+DEFAULT_VA_EMAIL = "admin@childpsych.ie"
+DEFAULT_VA_PASSWORD = "childpsych"
 DEFAULT_RECIPIENTS = [
     "drdavid@childpsych.ie",
     "info@childpsych.ie",
@@ -260,8 +262,8 @@ def verify_password(password, stored):
 
 
 
-def load_users():
-    default_user = {
+def default_users_data():
+    admin_user = {
         "id": 1,
         "email": DEFAULT_LOGIN_EMAIL,
         "password": password_hash(DEFAULT_LOGIN_PASSWORD),
@@ -270,28 +272,93 @@ def load_users():
         "can_invoice": True,
         "active": True,
     }
-    default = {"next_id": 2, "users": [default_user]}
+    va_user = {
+        "id": 2,
+        "email": DEFAULT_VA_EMAIL,
+        "password": password_hash(DEFAULT_VA_PASSWORD),
+        "is_admin": False,
+        "can_report": True,
+        "can_invoice": True,
+        "active": True,
+    }
+    return {"next_id": 3, "users": [admin_user, va_user]}
+
+
+def normalise_users_data(data):
+    if not isinstance(data, dict):
+        data = default_users_data()
+    users = data.get("users")
+    if not isinstance(users, list):
+        data = default_users_data()
+        users = data["users"]
+
+    changed = False
+    # Ensure each user has the current expected privilege keys.
+    for u in users:
+        if "active" not in u:
+            u["active"] = True; changed = True
+        if "is_admin" not in u:
+            u["is_admin"] = False; changed = True
+        if "can_report" not in u:
+            u["can_report"] = True; changed = True
+        if "can_invoice" not in u:
+            u["can_invoice"] = False; changed = True
+
+    existing = {str(u.get("email", "")).lower(): u for u in users}
+
+    # Ensure the original administrator account exists unless it has been deliberately changed.
+    if DEFAULT_LOGIN_EMAIL.lower() not in existing:
+        next_id = int(data.get("next_id", 1) or 1)
+        admin = default_users_data()["users"][0]
+        admin["id"] = next_id
+        users.append(admin)
+        data["next_id"] = next_id + 1
+        changed = True
+
+    # Add the default VA account requested by Dr O'Driscoll.
+    if DEFAULT_VA_EMAIL.lower() not in existing:
+        next_id = int(data.get("next_id", 1) or 1)
+        va = default_users_data()["users"][1]
+        va["id"] = next_id
+        users.append(va)
+        data["next_id"] = next_id + 1
+        changed = True
+
+    max_id = max([int(u.get("id", 0) or 0) for u in users] + [0])
+    if int(data.get("next_id", 1) or 1) <= max_id:
+        data["next_id"] = max_id + 1
+        changed = True
+
+    if changed:
+        try:
+            save_users(data)
+        except Exception:
+            pass
+    return data
+
+
+def load_users():
     try:
         if USERS_FILE.exists():
             data = json.loads(USERS_FILE.read_text(encoding="utf-8"))
-            if isinstance(data.get("users"), list):
-                return data
+            return normalise_users_data(data)
     except Exception:
         pass
+
+    data = default_users_data()
     try:
         if AUTH_FILE.exists():
             old = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
             if "email" in old and "password" in old:
-                default_user["email"] = old.get("email", DEFAULT_LOGIN_EMAIL)
-                default_user["password"] = old.get("password", password_hash(DEFAULT_LOGIN_PASSWORD))
-                default = {"next_id": 2, "users": [default_user]}
+                data["users"][0]["email"] = old.get("email", DEFAULT_LOGIN_EMAIL)
+                data["users"][0]["password"] = old.get("password", password_hash(DEFAULT_LOGIN_PASSWORD))
     except Exception:
         pass
     try:
-        save_users(default)
+        save_users(data)
     except Exception:
         pass
-    return default
+    return data
 
 
 def save_users(data):
